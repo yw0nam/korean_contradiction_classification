@@ -34,6 +34,7 @@ def main(config):
 
     train, val = train_test_split(csv, test_size=config.valid_size, stratify=csv['label'], random_state=1004)
     
+    csv[['text', 'label']].to_csv(os.path.join(config.save_path,'csv.tsv'), sep='\t', index=False, header=None)
     train[['text', 'label']].to_csv(os.path.join(config.save_path,'train.tsv'), sep='\t', index=False, header=None)
     val[['text', 'label']].to_csv(os.path.join(config.save_path,'val.tsv'), sep='\t', index=False, header=None)
     test[['text', 'label']].to_csv(os.path.join(config.save_path,'test.tsv'), sep='\t', index=False, header=None)

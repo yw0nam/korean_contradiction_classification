@@ -16,22 +16,20 @@ def define_argparser():
     p.add_argument('--model_fn', default='kykim/bert-kor-base')
     p.add_argument('--save_path', default='./model/')
     p.add_argument('--train_fn', required=True)
-    p.add_argument('--valid_fn', required=True)
+    p.add_argument('--valid_fn', default=None)
     p.add_argument('--gradient_accumulation_steps', type=int, default=2)
     p.add_argument('--batch_size_per_device', type=int, default=64)
     p.add_argument('--n_epochs', type=int, default=10)
     p.add_argument('--warmup_ratio', type=float, default=.2)
     p.add_argument('--max_length', type=int, default=512)
-    p.add_argument('--load_weight', default=None)
+    p.add_argument('--random_state', default=None, type=int)
 
     config = p.parse_args()
 
     return config
     
-def main(config):
+def train_model(config, train_dataset, valid_dataset):
 
-    train_dataset = get_datasets(config.train_fn)
-    valid_dataset = get_datasets(config.valid_fn)
     # You can change model here.
     tokenizer = AutoTokenizer.from_pretrained(config.model_fn)
     model = AutoModelForSequenceClassification.from_pretrained(config.model_fn, num_labels=3)
@@ -58,13 +56,12 @@ def main(config):
         warmup_steps=n_warmup_steps,
         weight_decay=0.01,
         fp16=True,
-        # evaluation_strategy='epoch',
         evaluation_strategy='steps',
-        logging_steps=n_total_iterations // 100,
+        logging_steps=n_total_iterations // 200,
         save_strategy ='steps',
         save_steps=n_total_iterations // config.n_epochs,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
-        metric_for_best_model =True
+        metric_for_best_model ="accuracy"
     )
 
     trainer = Trainer(
@@ -93,4 +90,11 @@ def compute_metrics(eval_pred):
 
 if __name__ == '__main__':
     config = define_argparser()
-    main(config)
+
+    if config.valid_fn:
+        train_dataset = get_datasets(config.train_fn)
+        valid_dataset = get_datasets(config.valid_fn)
+    else:
+        train_dataset, valid_dataset = get_datasets(config.train_fn, config.random_state)
+        
+    train_model(config, train_dataset, valid_dataset)
