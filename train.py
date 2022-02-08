@@ -17,7 +17,7 @@ def define_argparser():
     p.add_argument('--save_path', default='./model/')
     p.add_argument('--train_fn', required=True)
     p.add_argument('--gradient_accumulation_steps', type=int, default=2)
-    p.add_argument('--batch_size_per_device', type=int, default=64)
+    p.add_argument('--batch_size_per_device', type=int, default=128)
     p.add_argument('--n_epochs', type=int, default=10)
     p.add_argument('--warmup_ratio', type=float, default=.2)
     p.add_argument('--max_length', type=int, default=512)
@@ -64,7 +64,6 @@ def train_model(config, train_dataset, valid_dataset, save_path):
         label_smoothing_factor=0.0,
         save_steps=n_total_iterations // config.n_epochs,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
-        metric_for_best_model ="accuracy"
     )
 
     trainer = Trainer(
