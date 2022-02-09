@@ -22,6 +22,7 @@ def define_argparser():
     p.add_argument('--warmup_ratio', type=float, default=.2)
     p.add_argument('--max_length', type=int, default=512)
     p.add_argument('--random_state', default=512, type=int)
+    p.add_argument('--fold', default=5, type=int)
 
     config = p.parse_args()
 
@@ -91,7 +92,7 @@ def compute_metrics(eval_pred):
 
 if __name__ == '__main__':
     config = define_argparser()
-    skf = StratifiedKFold(n_splits=5, random_state=512, shuffle=True)
+    skf = StratifiedKFold(n_splits=config.fold, random_state=512, shuffle=True)
     data = pd.read_csv('./data/csv.tsv', sep='\t', names=['input_seq', 'label'])
 
     for cv_idx, data_index in enumerate(skf.split(data['input_seq'], data['label'])):
