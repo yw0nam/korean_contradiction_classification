@@ -29,7 +29,7 @@ def main():
     model_address = ["klue/roberta-large",
                     "xlm-roberta-large"]
 
-    model_root_path = "./model/experiment_5-fold-cv/"
+    model_root_path = "./model/experiment_10-fold-cv/"
     
     test = pd.read_csv('./data/test.tsv', sep='\t',
                         header=None, names=['text', 'label'])
@@ -51,13 +51,13 @@ def main():
         logits = []
         for path in cv_pathes:
             logits.append(predict(path, loader))
-        final_logits.append(torch.sum(torch.stack(logits), dim=0) / 5)
+        final_logits.append(torch.sum(torch.stack(logits), dim=0) / len(logits))
     return final_logits
 
 # %%
 logit = main()
 # %%
-torch.argmax(torch.sum(torch.stack(logit), dim=0) / 2, dim=1)
+torch.argmax(torch.sum(torch.stack(logit), dim=0) / len(logit), dim=1)
 # %%
 test = pd.read_csv('./data/test.tsv', sep='\t',
                 header=None, names=['text', 'label'])
@@ -69,11 +69,11 @@ label2str = {
     2 : "neutral" 
 }
 # %%
-test['label'] = torch.argmax(torch.sum(torch.stack(logit), dim=0) / 2, dim=1)
+test['label'] = torch.argmax(torch.sum(torch.stack(logit), dim=0) / len(logit), dim=1)
 
 # %%
 test['label'] = test['label'].replace(label2str)
 # %%
 test['index'] = test.index 
-test[['index', 'label']].to_csv('./data/submission_5-fold_cv_ensemble_with_2_model.csv', index=False)
+test[['index', 'label']].to_csv('./data/submission_10-fold_cv_ensemble_with_2_model.csv', index=False)
 # %%
