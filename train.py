@@ -8,7 +8,7 @@ from transformers import TrainingArguments
 import argparse, os, json
 from datasets import load_metric, load_dataset
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 
 label_dicts = {
@@ -22,14 +22,15 @@ def define_argparser():
     
     p.add_argument('--model_fn', default='kykim/bert-kor-base')
     p.add_argument('--save_path', default='./model/')
-    p.add_argument('--train_fn', required=True)
+    p.add_argument('--train_fn', required=True, default='./data/train_data.csv')
     p.add_argument('--gradient_accumulation_steps', type=int, default=2)
-    p.add_argument('--batch_size_per_device', type=int, default=64)
+    p.add_argument('--batch_size_per_device', type=int, default=32)
     p.add_argument('--n_epochs', type=int, default=10)
     p.add_argument('--warmup_ratio', type=float, default=.2)
-    p.add_argument('--max_length', type=int, default=512)
+    p.add_argument('--max_length', type=int, default=256)
     p.add_argument('--random_state', default=512, type=int)
     p.add_argument('--fold', default=5, type=int)
+    p.add_argument('--add_extra_data', default=None, type=str)
 
     config = p.parse_args()
 
@@ -97,29 +98,47 @@ def compute_metrics(eval_pred):
     predictions = np.argmax(logits, axis=-1)
     return metric.compute(predictions=predictions, references=labels)
 
+def make_dataset(config, data, index, ex_data, cv_index):
+    train_index, val_index = index[0], index[1]
+    train_premise, val_premise = data['premise'][train_index], data['premise'][val_index]
+    train_hypothesis, val_hypothesis = data['hypothesis'][train_index], data['hypothesis'][val_index]
+    train_label, val_label = data['label'][train_index], data['label'][val_index]
+    
+    if config.add_extra_data:
+        ex_data, _ = train_test_split(ex_data, 
+                                   test_size=0.2, 
+                                   random_state=cv_index, 
+                                   stratify=ex_data['label'])
+        
+        train_premise = train_premise.to_list() + ex_data['premise'].to_list()
+        train_hypothesis = train_hypothesis.to_list() + ex_data['hypothesis'].to_list()
+        train_label = train_label.to_list() + ex_data['label'].to_list()
+
+    train_dataset = load_Dataset(
+        train_premise,
+        train_hypothesis,
+        train_label
+    )
+    
+    valid_dataset = load_Dataset(
+        val_premise.to_list(),
+        val_hypothesis.to_list(),
+        val_label.to_list()
+    )
+    return train_dataset, valid_dataset
+        
 if __name__ == '__main__':
     config = define_argparser()
     skf = StratifiedKFold(n_splits=config.fold, random_state=512, shuffle=True)
     data = pd.read_csv(config.train_fn)
     
+    if config.add_extra_data:
+        ex_data = pd.read_csv(config.add_extra_data)
+    else:
+        ex_data = None
     data['label'] = data['label'].replace(label_dicts)
-    data['label'] = data['label'].astype(str)
     
     for cv_idx, data_index in enumerate(skf.split(data['premise'], data['label'])):
-        train_index, val_index = data_index[0], data_index[1]
-        train_premise, val_premise = data['premise'][train_index], data['premise'][val_index]
-        train_hypothesis, val_hypothesis = data['hypothesis'][train_index], data['hypothesis'][val_index]
-        train_label, val_label = data['label'][train_index], data['label'][val_index]
-        
-        train_dataset = load_Dataset(
-            train_premise.to_list(), 
-            train_hypothesis.to_list(),
-            train_label.to_list()
-        )
-        valid_dataset = load_Dataset(
-            val_premise.to_list(),
-            val_hypothesis.to_list(),
-            val_label.to_list()
-        )
+        train_dataset, valid_dataset = make_dataset(config, data, data_index, ex_data, cv_idx)
         save_path = os.path.join(config.save_path, str(cv_idx))
         train_model(config, train_dataset, valid_dataset, save_path)
