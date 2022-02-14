@@ -6,10 +6,17 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers import Trainer
 from transformers import TrainingArguments
 import argparse, os, json
-from datasets import load_metric
+from datasets import load_metric, load_dataset
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 
+
+label_dicts = {
+    "entailment" : 0,
+    "contradiction": 1,
+    "neutral" :2
+}
+    
 def define_argparser():
     p = argparse.ArgumentParser()
     
@@ -17,7 +24,7 @@ def define_argparser():
     p.add_argument('--save_path', default='./model/')
     p.add_argument('--train_fn', required=True)
     p.add_argument('--gradient_accumulation_steps', type=int, default=2)
-    p.add_argument('--batch_size_per_device', type=int, default=128)
+    p.add_argument('--batch_size_per_device', type=int, default=64)
     p.add_argument('--n_epochs', type=int, default=10)
     p.add_argument('--warmup_ratio', type=float, default=.2)
     p.add_argument('--max_length', type=int, default=512)
@@ -71,8 +78,8 @@ def train_model(config, train_dataset, valid_dataset, save_path):
         model=model,
         args=training_args,
         data_collator=dataCollator(tokenizer,
-                                  config.max_length,
-                                  with_text=False),
+                                  config.max_length
+                                  ),
         compute_metrics=compute_metrics,
         train_dataset=train_dataset,
         eval_dataset=valid_dataset,
@@ -93,14 +100,26 @@ def compute_metrics(eval_pred):
 if __name__ == '__main__':
     config = define_argparser()
     skf = StratifiedKFold(n_splits=config.fold, random_state=512, shuffle=True)
-    data = pd.read_csv('./data/csv.tsv', sep='\t', names=['input_seq', 'label'])
-
-    for cv_idx, data_index in enumerate(skf.split(data['input_seq'], data['label'])):
+    data = pd.read_csv(config.train_fn)
+    
+    data['label'] = data['label'].replace(label_dicts)
+    data['label'] = data['label'].astype(str)
+    
+    for cv_idx, data_index in enumerate(skf.split(data['premise'], data['label'])):
         train_index, val_index = data_index[0], data_index[1]
-        train_seq, val_seq = data['input_seq'][train_index], data['input_seq'][val_index]
+        train_premise, val_premise = data['premise'][train_index], data['premise'][val_index]
+        train_hypothesis, val_hypothesis = data['hypothesis'][train_index], data['hypothesis'][val_index]
         train_label, val_label = data['label'][train_index], data['label'][val_index]
         
-        train_dataset = load_Dataset(train_seq.to_list(), train_label.to_list())
-        valid_dataset = load_Dataset(val_seq.to_list(), val_label.to_list())
+        train_dataset = load_Dataset(
+            train_premise.to_list(), 
+            train_hypothesis.to_list(),
+            train_label.to_list()
+        )
+        valid_dataset = load_Dataset(
+            val_premise.to_list(),
+            val_hypothesis.to_list(),
+            val_label.to_list()
+        )
         save_path = os.path.join(config.save_path, str(cv_idx))
         train_model(config, train_dataset, valid_dataset, save_path)

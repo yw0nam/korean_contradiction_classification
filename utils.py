@@ -6,21 +6,23 @@ from sklearn.model_selection import train_test_split
 
 class dataCollator():
 
-    def __init__(self, tokenizer, max_length, with_text=True, inference=False):
+    def __init__(self, tokenizer, max_length, inference=False):
         self.tokenizer = tokenizer
         self.max_length = max_length
-        self.with_text = with_text
         self.inference = inference
         
     def __call__(self, samples):
-        input_seq = [s['input_seq'] for s in samples]
+        premise = [s['premise'] for s in samples]
+        hypothesis = [s['hypothesis'] for s in samples]
         label = [s['label'] for s in samples]
         
         input_encoding = self.tokenizer(
-            input_seq,
+            list(premise),
+            list(hypothesis),
             padding=True,
             truncation=True,
             return_tensors="pt",
+            add_special_tokens=True,
             max_length=self.max_length
         )
 
@@ -32,25 +34,26 @@ class dataCollator():
         if not self.inference:
             encode_label = torch.tensor(list(map(lambda x: int(x), label)))
             return_value['labels'] = encode_label
-        if self.with_text:
-            return_value['input_seq'] = input_seq
         return return_value
 
 
 class load_Dataset(Dataset):
 
-    def __init__(self, input_seq, labels):
-        self.input_seq = input_seq
+    def __init__(self, premise, hypothesis, labels):
+        self.premise = premise
+        self.hypothesis = hypothesis
         self.labels = labels
-    
+        
     def __len__(self):
-        return len(self.input_seq)
+        return len(self.premise)
     
     def __getitem__(self, item):
-        input_seq = str(self.input_seq[item])
+        premise = str(self.premise[item])
+        hypothesis = str(self.hypothesis[item])
         label = str(self.labels[item])
 
         return {
-            'input_seq': input_seq,
+            'premise': premise,
+            'hypothesis': hypothesis,
             'label': label,
         }

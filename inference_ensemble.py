@@ -21,18 +21,20 @@ def predict(model_path, loader):
     return torch.cat(output_ls)
 
 # %%
-def main():
-    model_save_pathes = ["klue-roberta-large",
-                         "xlm-roberta-large"]
+def main(data):
+    model_save_pathes = [
+        "klue-roberta-large",
+        "xlm-roberta-large",
+        ]
 
 
-    model_address = ["klue/roberta-large",
-                    "xlm-roberta-large"]
+    model_address = [
+        "klue/roberta-large",
+        "xlm-roberta-large",
+        ]
 
-    model_root_path = "./model/experiment_10-fold-cv/"
+    model_root_path = "./model/experiment_20-fold-cv/"
     
-    test = pd.read_csv('./data/test.tsv', sep='\t',
-                        header=None, names=['text', 'label'])
     final_logits = []
     for i in range(len(model_save_pathes)):
         cv_pathes = glob(os.path.join(model_root_path, model_save_pathes[i], '*'))
@@ -41,10 +43,11 @@ def main():
         collate_arg = {
             'tokenizer': tokenizer,
             'max_length': 512,
-            'with_text': False,
             'inference': True,
         }
-        test_dataset = load_Dataset(test['text'].to_list(), test['label'].to_list())
+        test_dataset = load_Dataset(
+            data['premise'].to_list(), data['hypothesis'].to_list(), data['label'].to_list()
+            )
         loader = DataLoader(test_dataset, batch_size=64,
                             collate_fn=dataCollator(**collate_arg), shuffle=False)
 
@@ -55,25 +58,17 @@ def main():
     return final_logits
 
 # %%
-logit = main()
-# %%
-torch.argmax(torch.sum(torch.stack(logit), dim=0) / len(logit), dim=1)
-# %%
-test = pd.read_csv('./data/test.tsv', sep='\t',
-                header=None, names=['text', 'label'])
 
-# %%
+data = pd.read_csv('./data/test_data.csv')
+logit = main(data)
+
 label2str = {
     0 : "entailment" ,
     1 : "contradiction",
     2 : "neutral" 
 }
-# %%
-test['label'] = torch.argmax(torch.sum(torch.stack(logit), dim=0) / len(logit), dim=1)
-
-# %%
-test['label'] = test['label'].replace(label2str)
-# %%
-test['index'] = test.index 
-test[['index', 'label']].to_csv('./data/submission_10-fold_cv_ensemble_with_2_model.csv', index=False)
+data['label'] = torch.argmax(torch.sum(torch.stack(logit), dim=0) / len(logit), dim=1)
+data['label'] = data['label'].replace(label2str)
+data['index'] = data.index 
+data[['index', 'label']].to_csv('./data/submission_20-fold_cv_ensemble_with_2_model.csv', index=False)
 # %%
