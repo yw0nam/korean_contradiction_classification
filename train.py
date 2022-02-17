@@ -24,9 +24,9 @@ def define_argparser():
     p.add_argument('--save_path', default='./model/')
     p.add_argument('--train_fn', required=True, default='./data/train_data.csv')
     p.add_argument('--gradient_accumulation_steps', type=int, default=2)
-    p.add_argument('--batch_size_per_device', type=int, default=32)
+    p.add_argument('--batch_size_per_device', type=int, default=128)
     p.add_argument('--n_epochs', type=int, default=10)
-    p.add_argument('--warmup_ratio', type=float, default=.2)
+    p.add_argument('--warmup_ratio', type=float, default=.1)
     p.add_argument('--max_length', type=int, default=256)
     p.add_argument('--random_state', default=512, type=int)
     p.add_argument('--fold', default=5, type=int)
@@ -62,15 +62,14 @@ def train_model(config, train_dataset, valid_dataset, save_path):
         per_device_train_batch_size=config.batch_size_per_device,
         per_device_eval_batch_size=config.batch_size_per_device,
         warmup_steps=n_warmup_steps,
-        weight_decay=0.01,
         fp16=True,
         logging_strategy='epoch',
+        logging_dir=os.path.join(save_path, "tensorboard"),
         evaluation_strategy='epoch',
         save_strategy='epoch',
         metric_for_best_model='accuracy',
         greater_is_better=True,
         load_best_model_at_end=True,
-        label_smoothing_factor=0.0,
         save_steps=n_total_iterations // config.n_epochs,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
     )
@@ -104,20 +103,20 @@ def make_dataset(config, data, index, ex_data, cv_index):
     train_hypothesis, val_hypothesis = data['hypothesis'][train_index], data['hypothesis'][val_index]
     train_label, val_label = data['label'][train_index], data['label'][val_index]
     
-    if config.add_extra_data:
-        ex_data, _ = train_test_split(ex_data, 
-                                   test_size=0.2, 
-                                   random_state=cv_index, 
-                                   stratify=ex_data['label'])
+    # if config.add_extra_data:
+    #     ex_data, _ = train_test_split(ex_data, 
+    #                                test_size=0.2, 
+    #                                random_state=cv_index, 
+    #                                stratify=ex_data['label'])
         
-        train_premise = train_premise.to_list() + ex_data['premise'].to_list()
-        train_hypothesis = train_hypothesis.to_list() + ex_data['hypothesis'].to_list()
-        train_label = train_label.to_list() + ex_data['label'].to_list()
+    #     train_premise = train_premise.to_list() + ex_data['premise'].to_list()
+    #     train_hypothesis = train_hypothesis.to_list() + ex_data['hypothesis'].to_list()
+    #     train_label = train_label.to_list() + ex_data['label'].to_list()
 
     train_dataset = load_Dataset(
-        train_premise,
-        train_hypothesis,
-        train_label
+        train_premise.to_list(),
+        train_hypothesis.to_list(),
+        train_label.to_list()
     )
     
     valid_dataset = load_Dataset(

@@ -7,7 +7,26 @@ from transformers import AutoTokenizer
 from torch.utils.data import DataLoader
 from glob import glob
 import os
-torch.cuda.set_device('cuda:0')
+import argparse
+from tqdm import tqdm
+
+label2str = {
+    0 : "entailment" ,
+    1 : "contradiction",
+    2 : "neutral" 
+}
+
+def define_argparser():
+    p = argparse.ArgumentParser()
+
+    p.add_argument('--model_save_path', required=True, type=str)
+    p.add_argument('--model_address', required=True, type=str)
+    p.add_argument('--model_root_path', required=True, type=str)
+    p.add_argument('--test_fn', default='./data/test_data.csv')
+    p.add_argument('--save_path', default="./submission/submission.csv", required=True)
+    config = p.parse_args()
+
+    return config
 
 @torch.no_grad()
 def predict(model_path, loader):
@@ -21,23 +40,16 @@ def predict(model_path, loader):
     return torch.cat(output_ls)
 
 # %%
-def main(data):
-    model_save_pathes = [
-        "klue-roberta-large",
-        "xlm-roberta-large",
-        ]
-
-
-    model_address = [
-        "klue/roberta-large",
-        "xlm-roberta-large",
-        ]
-
-    model_root_path = "./model/experiment_20-fold-cv/"
+def main(config):
+    
+    data = pd.read_csv(config.test_fn)
+    model_save_pathes = config.model_save_path.split('|')
+    model_address = config.model_address.split('|')
     
     final_logits = []
     for i in range(len(model_save_pathes)):
-        cv_pathes = glob(os.path.join(model_root_path, model_save_pathes[i], '*'))
+        print("Model- %s Inference Start"%model_address[i])
+        cv_pathes = glob(os.path.join(config.model_root_path, model_save_pathes[i], '*'))
         tokenizer = AutoTokenizer.from_pretrained(model_address[i])
 
         collate_arg = {
@@ -52,23 +64,16 @@ def main(data):
                             collate_fn=dataCollator(**collate_arg), shuffle=False)
 
         logits = []
-        for path in cv_pathes:
+        for path in tqdm(cv_pathes):
             logits.append(predict(path, loader))
         final_logits.append(torch.sum(torch.stack(logits), dim=0) / len(logits))
-    return final_logits
+        
+        data['label'] = torch.argmax(
+            torch.sum(torch.stack(final_logits), dim=0) / len(final_logits), dim=1)
+        data['label'] = data['label'].replace(label2str)
+        data['index'] = data.index
+        data[['index', 'label']].to_csv(config.save_path, index=False)
 
-# %%
-
-data = pd.read_csv('./data/test_data.csv')
-logit = main(data)
-
-label2str = {
-    0 : "entailment" ,
-    1 : "contradiction",
-    2 : "neutral" 
-}
-data['label'] = torch.argmax(torch.sum(torch.stack(logit), dim=0) / len(logit), dim=1)
-data['label'] = data['label'].replace(label2str)
-data['index'] = data.index 
-data[['index', 'label']].to_csv('./data/submission_20-fold_cv_ensemble_with_2_model.csv', index=False)
-# %%
+if __name__ == '__main__':
+    config = define_argparser()
+    main(config)
